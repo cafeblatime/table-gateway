@@ -102,11 +102,16 @@
         if (status.toLowerCase() !== "open") {
           renderOccupiedUI(tableNum);
         } else {
-          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}`);
+          // Reset any renewal tracking for fresh QR code scans
+          localStorage.removeItem('renewal_count_' + tableNum);
+
+          // Pass must_buy_menu=true for Session #1
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}&must_buy_menu=true`);
         }
       } catch (err) {
         console.error("Gateway error", err);
-        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=Open`);
+        // Fallback redirect requiring menu purchase
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=Open&must_buy_menu=true`);
       }
     }
 
