@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preparing Session...</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; text-align: center; padding-top: 40vh; margin: 0; }
+    .spinner { font-size: 0.9rem; color: #aaa; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+  <div class="spinner">Preparing your table session...</div>
+
+  <script>
+    async function initGateway() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tableNum = urlParams.get('table') || '1';
+      const SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+      
+      try {
+        // Query Google Sheets invisibly via Apps Script JSON API
+        let response = await fetch(`${SCRIPT_URL}?action=check&table=${tableNum}`);
+        let data = await response.json();
+        let status = data.status || "Available";
+        
+        // Redirect cleanly to Tally; address bar stays on your GitHub Pages domain
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}`);
+      } catch (err) {
+        console.error("Gateway error", err);
+        // Fallback to Tally directly if fetch fails
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=Available`);
+      }
+    }
+    
+    initGateway();
+  </script>
+</body>
+</html>
