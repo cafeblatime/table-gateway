@@ -16,7 +16,7 @@
     async function initGateway() {
       const urlParams = new URLSearchParams(window.location.search);
       const tableNum = urlParams.get('table') || '1';
-      const SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+      const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2MY_qM4p18RYNwn0a8DX_FGQMdMNyJ4q6b8TnZSnVscOGiUIIPjh0xRaZFvZleMh0Mw/exec";
       
       try {
         // Query Google Sheets invisibly via Apps Script JSON API
@@ -24,8 +24,14 @@
         let data = await response.json();
         let status = data.status || "Available";
         
-        // Redirect cleanly to Tally; address bar stays on your GitHub Pages domain
-        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}`);
+        // If table is currently Occupied, Active, or Expired, block access with a popup
+        if (status === "Occupied" || status === "ACTIVE" || status === "EXPIRED") {
+          alert("Table is booked, try another one");
+          document.body.innerHTML = "<div style='color:#fff; font-family:sans-serif; text-align:center; padding-top:40vh;'><h2>Table is booked, try another one</h2></div>";
+        } else {
+          // Redirect cleanly to Tally if available
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}`);
+        }
       } catch (err) {
         console.error("Gateway error", err);
         // Fallback to Tally directly if fetch fails
