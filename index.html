@@ -6,12 +6,11 @@
   <title>Preparing Session...</title>
   <style>
     :root {
-      --bg-color: #0F2C59; /* Main background: Dark Royal Blue */
-      --card-bg: #FAF9F6; /* Off-white container */
+      --bg-color: #0F2C59;
+      --card-bg: #FAF9F6;
       --royal-blue: #0F2C59;
       --text-main: #0F2C59;
       --text-muted: #5A6B82;
-      --border-color: #E2E8F0;
       --accent-red: #D32F2F;
     }
 
@@ -90,11 +89,11 @@
       const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2MY_qM4p18RYNwn0a8DX_FGQMdMNyJ4q6b8TnZSnVscOGiUIIPjh0xRaZFvZleMh0Mw/exec";
       
       try {
-        let response = await fetch(`${SCRIPT_URL}?action=check&table=${tableNum}`);
+        // Appended &_nc timestamp to bypass mobile browser HTTP caching completely
+        let response = await fetch(`${SCRIPT_URL}?action=check&table=${tableNum}&_nc=${Date.now()}`);
         let data = await response.json();
         let status = data.status || "Open";
         
-        // If the table status is NOT "Open", block access immediately
         if (status.toLowerCase() !== "open") {
           renderOccupiedUI(tableNum);
         } else {
@@ -102,7 +101,6 @@
         }
       } catch (err) {
         console.error("Gateway error", err);
-        // Fallback option in case network/script check fails
         window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=Open`);
       }
     }
@@ -111,7 +109,7 @@
       const card = document.getElementById('card');
       card.innerHTML = `
         <div class="error-title">Table ${tableNum} is Occupied</div>
-        <div class="error-msg">This table currently has an active focus session. Please choose a different table to continue.</div>
+        <div class="error-msg">This table is currently booked or another guest is completing a reservation.</div>
         <button class="btn" onclick="window.location.reload()">🔄 Re-check Status</button>
       `;
     }
