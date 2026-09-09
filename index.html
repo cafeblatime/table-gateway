@@ -114,20 +114,20 @@
         let status = targetTable ? targetTable.status : "Open";
         let assignedUserId = targetTable ? targetTable.userId : "";
 
-        // Triangulation check: If occupied, ensure it belongs to THIS exact browser token
+        // Triangulation check: If occupied, ensure it belongs to THIS exact browser token (using 'client' parameter matching Tally hidden field)
         if (status.toLowerCase() !== "open" && assignedUserId && assignedUserId !== userToken) {
           renderOccupiedUI(tableNum);
         } else {
           // Reset renewal tracking for fresh interactions if needed
           localStorage.removeItem('renewal_count_' + tableNum);
 
-          // Forward the persistent user token and even_uneven parameter straight into Tally
-          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&user_token=${userToken}&even_uneven=true`);
+          // Forward the persistent user token as 'client' and even_uneven parameter straight into Tally
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
         }
       } catch (err) {
         console.error("Gateway error", err);
-        // Fallback pass-through keeping token intact
-        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&user_token=${userToken}&even_uneven=true`);
+        // Fallback pass-through keeping token intact as 'client'
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
       }
     }
 
