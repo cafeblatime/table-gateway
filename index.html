@@ -6,14 +6,13 @@
   <title>Preparing Session...</title>
   <style>
     :root {
-      --bg-color: #1800ad; /* Updated Main Background: Vivid Royal Blue */
-      --card-bg: #FAF9F6;  /* Off-white container */
+      --bg-color: #1800ad;
+      --card-bg: #FAF9F6;
       --royal-blue: #1800ad;
       --text-main: #1800ad;
       --text-muted: #5A6B82;
       --accent-red: #D32F2F;
     }
-
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
       background: var(--bg-color); 
@@ -26,7 +25,6 @@
       align-items: center;
       min-height: 90vh;
     }
-
     .card { 
       background: var(--card-bg); 
       border-radius: 20px; 
@@ -36,46 +34,13 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); 
     }
-
-    .spinner { 
-      font-size: 1rem; 
-      color: var(--royal-blue); 
-      font-weight: 600;
-      letter-spacing: 0.5px; 
-    }
-
-    .error-title {
-      font-size: 1.3rem;
-      font-weight: 700;
-      color: var(--accent-red);
-      margin-bottom: 12px;
-    }
-
-    .error-msg {
-      font-size: 0.95rem;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-      line-height: 1.4;
-    }
-
+    .spinner { font-size: 1rem; color: var(--royal-blue); font-weight: 600; letter-spacing: 0.5px; }
+    .error-title { font-size: 1.3rem; font-weight: 700; color: var(--accent-red); margin-bottom: 12px; }
+    .error-msg { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4; }
     .btn { 
-      background: var(--royal-blue); 
-      color: #FFFFFF; 
-      border: none; 
-      padding: 14px 20px; 
-      font-size: 1rem; 
-      font-weight: 600; 
-      border-radius: 12px; 
-      cursor: pointer; 
-      width: 100%; 
-      text-decoration: none;
-      display: inline-block;
-      box-sizing: border-box;
-      transition: opacity 0.2s ease;
-    }
-
-    .btn:active {
-      opacity: 0.9;
+      background: var(--royal-blue); color: #FFFFFF; border: none; padding: 14px 20px; 
+      font-size: 1rem; font-weight: 600; border-radius: 12px; cursor: pointer; width: 100%; 
+      text-decoration: none; display: inline-block; box-sizing: border-box; 
     }
   </style>
 </head>
@@ -86,32 +51,45 @@
   </div>
 
   <script>
+    // Generate or fetch a persistent device-locked user token that survives clearing cache/sessions
+    function getPersistentUserToken() {
+      let token = localStorage.getItem('persistent_user_token');
+      if (!token) {
+        token = 'USR-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        localStorage.setItem('persistent_user_token', token);
+      }
+      return token;
+    }
+
     async function initGateway() {
       const urlParams = new URLSearchParams(window.location.search);
       const rawTable = urlParams.get('table') || urlParams.get('Table') || '1';
       const tableNum = rawTable.replace(/[^0-9]/g, '') || '1';
       
+      const userToken = getPersistentUserToken();
       const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2MY_qM4p18RYNwn0a8DX_FGQMdMNyJ4q6b8TnZSnVscOGiUIIPjh0xRaZFvZleMh0Mw/exec";
       
       try {
-        // Appended &_nc timestamp to bypass mobile browser caching
-        let response = await fetch(`${SCRIPT_URL}?action=check&table=${tableNum}&_nc=${Date.now()}`);
+        // Use action=client to fetch data and verify ownership
+        let response = await fetch(`${SCRIPT_URL}?action=client&table=${tableNum}&_nc=${Date.now()}`);
         let data = await response.json();
-        let status = data.status || "Open";
         
-        if (status.toLowerCase() !== "open") {
+        let tables = data.tables || {};
+        let targetTable = tables[tableNum];
+        let tableStatus = targetTable ? targetTable.status : "Open";
+        let assignedUserId = targetTable ? targetTable.userId : "";
+
+        // Triangulation Logic: If table is active, check if it belongs to THIS exact user token
+        if (tableStatus.toLowerCase() !== "open" && assignedUserId && assignedUserId !== userToken) {
           renderOccupiedUI(tableNum);
         } else {
-          // Reset any renewal tracking for fresh QR code scans
-          localStorage.removeItem('renewal_count_' + tableNum);
-
-          // Pass even_uneven=true for Session #1
-          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=${status}&even_uneven=true`);
+          // If it's open, or already belongs to this exact user, proceed smoothly to Tally
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&user_token=${userToken}&even_uneven=true`);
         }
       } catch (err) {
         console.error("Gateway error", err);
-        // Fallback redirect requiring menu purchase
-        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&status=Open&even_uneven=true`);
+        // Fallback pass-through
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&user_token=${userToken}&even_uneven=true`);
       }
     }
 
@@ -119,7 +97,7 @@
       const card = document.getElementById('card');
       card.innerHTML = `
         <div class="error-title">Table ${tableNum} is Occupied</div>
-        <div class="error-msg">This table is currently booked or another guest is completing a reservation.</div>
+        <div class="error-msg">This table is currently booked by another guest.</div>
         <button class="btn" onclick="window.location.reload()">🔄 Re-check Status</button>
       `;
     }
