@@ -1,361 +1,159 @@
-function updateClockAndClearExpired() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var liveSheet = ss.getSheetByName("Live Dashboard");
-  if (!liveSheet) return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preparing Session...</title>
+  <style>
+    :root {
+      --bg-color: #1800ad;
+      --card-bg: #FAF9F6;
+      --royal-blue: #1800ad;
+      --text-main: #1800ad;
+      --text-muted: #5A6B82;
+      --accent-red: #D32F2F;
+    }
 
-  var now = new Date();
-  liveSheet.getRange("H1").setValue(now);
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      background: var(--bg-color); 
+      color: var(--text-main); 
+      text-align: center; 
+      padding: 20px; 
+      margin: 0; 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 90vh;
+    }
 
-  var backlogSheet = ss.getSheetByName("Backlog");
-  if (!backlogSheet) return;
+    .card { 
+      background: var(--card-bg); 
+      border-radius: 20px; 
+      padding: 28px 24px; 
+      max-width: 360px; 
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); 
+    }
 
-  var lastRow = backlogSheet.getLastRow();
-  if (lastRow < 2) return;
+    .spinner { 
+      font-size: 1rem; 
+      color: var(--royal-blue); 
+      font-weight: 600;
+      letter-spacing: 0.5px; 
+    }
 
-  var backlogData = backlogSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  var currentTime = now.getTime();
-  var gracePeriodMs = 10 * 60 * 1000; // 10 minutes grace period
+    .error-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent-red);
+      margin-bottom: 12px;
+    }
 
-  var liveData = liveSheet.getDataRange().getValues();
-  for (var j = 1; j < liveData.length; j++) {
-    var liveRow = liveData[j];
-    var tNum = String(liveRow[0] || "").trim();
-    var tableStatusLive = String(liveRow[1] || "").trim().toUpperCase();
-    var endTimeRaw = liveRow[6]; // Column G in Live Dashboard: End Time
+    .error-msg {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
 
-    if (!tNum || tableStatusLive === "CLEARED" || tableStatusLive === "OPEN" || !endTimeRaw) continue;
+    .btn { 
+      background: var(--royal-blue); 
+      color: #FFFFFF; 
+      border: none; 
+      padding: 14px 20px; 
+      font-size: 1rem; 
+      font-weight: 600; 
+      border-radius: 12px; 
+      cursor: pointer; 
+      width: 100%; 
+      text-decoration: none;
+      display: inline-block;
+      box-sizing: border-box;
+      transition: opacity 0.2s ease;
+    }
 
-    var endTimeMs = new Date(endTimeRaw).getTime();
-    if (!isNaN(endTimeMs) && (currentTime > (endTimeMs + gracePeriodMs))) {
-      for (var k = backlogData.length - 1; k >= 0; k--) {
-        var bTableNum = String(backlogData[k][0]).trim();
-        var bStatus = String(backlogData[k][6] || "").trim().toUpperCase();
-        if (bTableNum === tNum && bStatus === "ACTIVE") {
-          backlogSheet.getRange(k + 2, 7).setValue("CLEARED");
-          backlogSheet.getRange(k + 2, 11).setValue(""); // Clear client token only upon full expiration + grace period
-        }
+    .btn:active {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="card" class="card">
+    <div class="spinner">Preparing your table session...</div>
+  </div>
+
+  <script>
+    // Generate or fetch a persistent browser-locked token so it never changes for this device
+    function getPersistentUserToken() {
+      let token = localStorage.getItem('persistent_user_token');
+      if (!token) {
+        token = 'USR-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        localStorage.setItem('persistent_user_token', token);
       }
-    }
-  }
-}
-
-function getUserColor(userId) {
-  var colors = ["#E8F5E9", "#E3F2FD", "#FFFDE7", "#F3E5F5", "#E0F2F1", "#FBE9E7", "#EFEBE9"];
-  var hash = 0;
-  for (var i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  var index = Math.abs(hash) % colors.length;
-  return colors[index];
-}
-
-function syncTallyRawToBacklog() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var rawSheet = ss.getSheetByName("Tally raw");
-  var backlogSheet = ss.getSheetByName("Backlog");
-  
-  if (!rawSheet || !backlogSheet) return;
-  
-  var rawLastRow = rawSheet.getLastRow();
-  if (rawLastRow < 2) return;
-  
-  var rawData = rawSheet.getRange(1, 1, rawLastRow, 16).getValues();
-  
-  var scriptProperties = PropertiesService.getScriptProperties();
-  var processedIds = JSON.parse(scriptProperties.getProperty("PROCESSED_TALLY_IDS") || "{}");
-
-  var backlogLastRow = backlogSheet.getLastRow();
-  var backlogData = backlogLastRow >= 2 ? backlogSheet.getRange(2, 1, backlogLastRow - 1, 11).getValues() : [];
-  var newProcessed = false;
-
-  var todayDateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-
-  for (var i = 1; i < rawData.length; i++) {
-    var row = rawData[i];
-    var tallySubId = String(row[0] || "").trim(); // Column A: User/Submission ID
-    
-    if (!tallySubId || processedIds[tallySubId]) continue;
-
-    var clientToken = String(row[8] || "").trim(); // Column I: Client Token
-    if (!clientToken) {
-      clientToken = "USR-" + tallySubId.substring(0, 6).toUpperCase();
+      return token;
     }
 
-    var tableNum = String(row[5] || "").trim(); // Column F: Table number
-    if (!tableNum) continue;
-
-    var tallyTimestamp = row[3] ? new Date(row[3]) : new Date();
-    var rowDateStr = Utilities.formatDate(tallyTimestamp, Session.getScriptTimeZone(), "yyyy-MM-dd");
-
-    // Reconnection / Table Migration Check: Look for an existing ACTIVE session for this client today
-    var existingActiveIndex = -1;
-    for (var b = 0; b < backlogData.length; b++) {
-      var bToken = String(backlogData[b][10] || "").trim();
-      var bStatus = String(backlogData[b][6] || "").trim().toUpperCase();
-      var bDateVal = backlogData[b][1] ? Utilities.formatDate(new Date(backlogData[b][1]), Session.getScriptTimeZone(), "yyyy-MM-dd") : "";
-
-      if (bToken === clientToken && bStatus === "ACTIVE" && bDateVal === todayDateStr) {
-        existingActiveIndex = b + 2; // spreadsheet row index
-        break;
-      }
-    }
-
-    if (existingActiveIndex !== -1) {
-      backlogSheet.getRange(existingActiveIndex, 1).setValue(tableNum);
-      processedIds[tallySubId] = true;
-      newProcessed = true;
-      continue;
-    }
-
-    var rawEvenUneven = row[15]; // Column P: Even/Uneven
-    var evenUnevenVal = rawEvenUneven === true || String(rawEvenUneven).toUpperCase() === "TRUE";
-
-    var newRowCols = new Array(11).fill("");
-    newRowCols[0] = tableNum;       // Column A: Table
-    newRowCols[1] = tallyTimestamp; // Column B: Timestamp
-    newRowCols[6] = "ACTIVE";       // Column G: TableStatus
-    newRowCols[9] = evenUnevenVal;  // Column J: Even/Uneven
-    newRowCols[10] = clientToken;   // Column K: Client token
-
-    backlogSheet.appendRow(newRowCols);
-    var targetRow = backlogSheet.getLastRow();
-
-    var userColor = getUserColor(clientToken);
-    backlogSheet.getRange(targetRow, 1, 1, 11).setBackground(userColor);
-
-    processedIds[tallySubId] = true;
-    newProcessed = true;
-  }
-  
-  if (newProcessed) {
-    scriptProperties.setProperty("PROCESSED_TALLY_IDS", JSON.stringify(processedIds));
-  }
-}
-
-function doGet(e) {
-  try {
-    var actionParam = (e && e.parameter && e.parameter.action) ? String(e.parameter.action).trim().toLowerCase() : "";
-    var tableNum = String((e && e.parameter && e.parameter.table) || "").trim();
-    var clientTokenParam = String((e && e.parameter && e.parameter.client) || "").trim();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    if (actionParam === "client") {
-      syncTallyRawToBacklog();
-
-      var liveSheet = ss.getSheetByName("Live Dashboard");
-      var liveData = liveSheet ? liveSheet.getDataRange().getValues() : [];
+    async function initGateway() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawTable = urlParams.get('table') || urlParams.get('Table') || '1';
+      const tableNum = rawTable.replace(/[^0-9]/g, '') || '1';
       
-      var backlogSheet = ss.getSheetByName("Backlog");
-      var backlogData = backlogSheet ? backlogSheet.getDataRange().getValues() : [];
+      const userToken = getPersistentUserToken();
+      const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2MY_qM4p18RYNwn0a8DX_FGQMdMNyJ4q6b8TnZSnVscOGiUIIPjh0xRaZFvZleMh0Mw/exec";
       
-      // Build table end times map from live dashboard
-      var tableEndTimes = {};
-      for (var lIdx = 1; lIdx < liveData.length; lIdx++) {
-        var lTNum = String(liveData[lIdx][0] || "").trim();
-        var lEndTime = liveData[lIdx][6] !== undefined ? String(liveData[lIdx][6]) : "";
-        if (lTNum && lEndTime) {
-          tableEndTimes[lTNum] = lEndTime;
-        }
-      }
-
-      var tableToUserId = {};
-      var clientActiveSession = null;
-      var todayDateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-
-      for (var r = 1; r < backlogData.length; r++) {
-        var tNumB = String(backlogData[r][0] || "").trim();
-        var bDateVal = backlogData[r][1] ? Utilities.formatDate(new Date(backlogData[r][1]), Session.getScriptTimeZone(), "yyyy-MM-dd") : "";
-        var bStatus = String(backlogData[r][6] || "").trim().toUpperCase();
-        var uId = String(backlogData[r][10] || "").trim(); // Column K
-
-        if (tNumB && uId) {
-          // Check if this session belongs to the requesting client token for today
-          if (clientTokenParam && uId === clientTokenParam && bDateVal === todayDateStr) {
-            var liveEndTime = tableEndTimes[tNumB];
-            var isTimeValid = false;
-            if (liveEndTime) {
-              var endMs = new Date(liveEndTime).getTime();
-              if (!isNaN(endMs) && endMs > Date.now()) {
-                isTimeValid = true;
-              }
-            }
-
-            // Reactivate session if time window is still valid even if manually cleared early
-            if (bStatus === "ACTIVE" || isTimeValid) {
-              if (bStatus !== "ACTIVE" && isTimeValid) {
-                backlogSheet.getRange(r + 1, 7).setValue("ACTIVE");
-                bStatus = "ACTIVE";
-              }
-
-              if (bStatus === "ACTIVE") {
-                tableToUserId[tNumB] = uId;
-                clientActiveSession = {
-                  table: tNumB,
-                  startTime: backlogData[r][1]
-                };
-              }
-            }
-          } else if (bStatus === "ACTIVE") {
-            tableToUserId[tNumB] = uId;
-          }
-        }
-      }
-
-      var tables = {};
-      var TOTAL_DEFAULT_TABLES = 5;
-      for (var t = 1; t <= TOTAL_DEFAULT_TABLES; t++) {
-        var key = String(t);
-        tables[key] = {
-          table: key,
-          status: "Open",
-          startTime: "",
-          endTime: "",
-          orders: [],
-          totalSum: 0,
-          intervalCount: false,
-          userId: ""
-        };
-      }
-
-      for (var i = 1; i < liveData.length; i++) {
-        var tNum = String(liveData[i][0] || "").trim();
-        if (!tNum) continue;
-
-        if (!tables[tNum]) {
-          tables[tNum] = {
-            table: tNum,
-            status: "Open",
-            startTime: "",
-            endTime: "",
-            orders: [],
-            totalSum: 0,
-            intervalCount: false,
-            userId: ""
-          };
+      try {
+        // Include action=client, target table, client user token, and a timestamp for cache busting
+        let response = await fetch(`${SCRIPT_URL}?action=client&table=${tableNum}&client=${userToken}&_nc=${Date.now()}`);
+        let data = await response.json();
+        
+        // Intercept if user has an ongoing active session anywhere today
+        if (data.activeSession && data.activeSession.endTime) {
+          renderActiveTimerUI(data.activeSession.table, data.activeSession.endTime);
+          return;
         }
 
-        var tableStatus = String(liveData[i][1] || "Open").trim(); 
-        var orderItem = String(liveData[i][2] || "").trim();      
-        var passVal = String(liveData[i][3] || "").trim().toUpperCase(); 
-        var totalVal = parseFloat(liveData[i][4] || 0);          
-        var startTime = liveData[i][5] !== undefined ? String(liveData[i][5]) : ""; 
-        var endTime = liveData[i][6] !== undefined ? String(liveData[i][6]) : "";   
+        let tables = data.tables || {};
+        let targetTable = tables[tableNum];
+        let status = targetTable ? targetTable.status : "Open";
+        let assignedUserId = targetTable ? targetTable.userId : "";
 
-        var upperStatus = tableStatus.toUpperCase();
-        if (upperStatus === "" || upperStatus === "CLEARED" || upperStatus === "OPEN") {
-          tables[tNum].status = "Open";
+        // Triangulation check: If occupied by someone else, show error
+        if (status.toLowerCase() !== "open" && assignedUserId && assignedUserId !== userToken) {
+          renderOccupiedUI(tableNum);
         } else {
-          tables[tNum].status = tableStatus; 
+          localStorage.removeItem('renewal_count_' + tableNum);
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
         }
-
-        if (orderItem && tables[tNum].orders.indexOf(orderItem) === -1) {
-          tables[tNum].orders.push(orderItem);
-        }
-        tables[tNum].totalSum += isNaN(totalVal) ? 0 : totalVal;
-
-        tables[tNum].intervalCount = (passVal === "YES" || passVal === "TRUE");
-        if (startTime) tables[tNum].startTime = startTime;
-        if (endTime) tables[tNum].endTime = endTime;
+      } catch (err) {
+        console.error("Gateway error", err);
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
       }
-
-      for (var tKey in tables) {
-        if (tableToUserId[tKey]) {
-          tables[tKey].userId = tableToUserId[tKey];
-        }
-      }
-
-      var activeSessionData = null;
-      if (clientTokenParam && clientActiveSession) {
-        var liveTableDetails = tables[clientActiveSession.table];
-        if (liveTableDetails && liveTableDetails.status.toUpperCase() !== "OPEN" && liveTableDetails.endTime) {
-          var endMs = new Date(liveTableDetails.endTime).getTime();
-          if (endMs > Date.now()) {
-            activeSessionData = {
-              table: clientActiveSession.table,
-              endTime: liveTableDetails.endTime
-            };
-          }
-        }
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({ 
-        status: "success", 
-        tables: tables, 
-        activeSession: activeSessionData 
-      })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (actionParam === "clear" && tableNum) {
-      var backlogSheet = ss.getSheetByName("Backlog");
-      var lastRow = backlogSheet.getLastRow();
-      if (lastRow < 2) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No data rows" })).setMimeType(ContentService.MimeType.JSON);
-      
-      var backlogData = backlogSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-      var found = false;
-      
-      for (var i = backlogData.length - 1; i >= 0; i--) {
-        var rowTable = String(backlogData[i][0]).trim();
-        var tableStatus = String(backlogData[i][6]).trim().toUpperCase(); 
-
-        if (rowTable === tableNum) {
-          if (tableStatus === "ACTIVE") {
-            backlogSheet.getRange(i + 2, 7).setValue("CLEARED");
-            // Retain client token in column 11 so they can resume if rescanned within time window
-          }
-          found = true;
-          break;
-        }
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", cleared: found }))
-        .setMimeType(ContentService.MimeType.JSON);
+    function renderActiveTimerUI(activeTable, endTime) {
+      const card = document.getElementById('card');
+      card.innerHTML = `
+        <div class="error-title" style="color: var(--royal-blue);">Active Session in Progress</div>
+        <div class="error-msg">You are currently checked into Table ${activeTable}. Resuming your active session timer...</div>
+      `;
+      setTimeout(() => {
+        window.location.replace(`https://cafeblatime.github.io/landingpageblatime/?table=${activeTable}&active=true`);
+      }, 1200);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid action or parameters" }))
-      .setMimeType(ContentService.MimeType.JSON);
-
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doPost(e) {
-  try {
-    if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "ignored" })).setMimeType(ContentService.MimeType.JSON);
+    function renderOccupiedUI(tableNum) {
+      const card = document.getElementById('card');
+      card.innerHTML = `
+        <div class="error-title">Table ${tableNum} is Occupied</div>
+        <div class="error-msg">This table is currently booked by another guest.</div>
+        <button class="btn" onclick="window.location.reload()">🔄 Re-check Status</button>
+      `;
     }
-
-    var data = JSON.parse(e.postData.contents);
-    var tableNum = String(data.table || "").trim(); 
-    var pushToken = String(data.token || "").trim(); 
-
-    if (!pushToken || pushToken.toLowerCase() === "null" || pushToken.toLowerCase() === "undefined") {
-      return ContentService.createTextOutput(JSON.stringify({ status: "ignored", message: "Invalid token" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var backlogSheet = ss.getSheetByName("Backlog");
-    var lastRow = backlogSheet.getLastRow();
-    if (lastRow < 2) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No data rows" })).setMimeType(ContentService.MimeType.JSON);
     
-    var backlogData = backlogSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-    var found = false;
-
-    for (var i = backlogData.length - 1; i >= 0; i--) {
-      var rowTable = String(backlogData[i][0]).trim();
-      var tableStatus = String(backlogData[i][6]).trim().toUpperCase(); 
-
-      if (rowTable === tableNum && tableStatus === "ACTIVE") {
-        backlogSheet.getRange(i + 2, 9).setValue(pushToken); 
-        found = true;
-        break;
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", updated: found }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+    initGateway();
+  </script>
+</body>
+</html>
