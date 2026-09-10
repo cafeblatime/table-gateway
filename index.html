@@ -86,12 +86,12 @@
   </div>
 
   <script>
-    // Generate or fetch a persistent browser-locked token so it never changes for this device
+    // Unified local storage key name across Gateway and Focus Timer UI
     function getPersistentUserToken() {
-      let token = localStorage.getItem('persistent_user_token');
+      let token = localStorage.getItem('focus_user_id');
       if (!token) {
         token = 'USR-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-        localStorage.setItem('persistent_user_token', token);
+        localStorage.setItem('focus_user_id', token);
       }
       return token;
     }
@@ -105,7 +105,6 @@
       const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2MY_qM4p18RYNwn0a8DX_FGQMdMNyJ4q6b8TnZSnVscOGiUIIPjh0xRaZFvZleMh0Mw/exec";
       
       try {
-        // Include action=client, target table, client user token, and a timestamp for cache busting
         let response = await fetch(`${SCRIPT_URL}?action=client&table=${tableNum}&client=${userToken}&_nc=${Date.now()}`);
         let data = await response.json();
         
@@ -120,16 +119,17 @@
         let status = targetTable ? targetTable.status : "Open";
         let assignedUserId = targetTable ? targetTable.userId : "";
 
-        // Triangulation check: If occupied by someone else, show error
+        // Check if occupied by another user
         if (status.toLowerCase() !== "open" && assignedUserId && assignedUserId !== userToken) {
           renderOccupiedUI(tableNum);
         } else {
           localStorage.removeItem('renewal_count_' + tableNum);
-          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
+          // Pass userToken to Tally pre-fill parameter: client_token
+          window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client_token=${userToken}&even_uneven=true`);
         }
       } catch (err) {
         console.error("Gateway error", err);
-        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client=${userToken}&even_uneven=true`);
+        window.location.replace(`https://tally.so/r/aQqkWX?table=${tableNum}&client_token=${userToken}&even_uneven=true`);
       }
     }
 
