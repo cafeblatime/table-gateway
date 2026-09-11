@@ -46,14 +46,14 @@
           <p>Please check your table number or ask counter staff for assistance.</p>
         `;
       } else {
-       const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}`;
+        const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}`;
         window.location.href = tallyUrl;
       }
     } catch (err) {
       document.getElementById("statusCard").innerHTML = `
         <h2>Connection Error</h2>
         <p>Could not verify table status. Proceeding to order form...</p>
-        <a href="${TALLY_BASE_URL}?table=${table}&user_id=${userId}" class="btn">Continue to Order</a>
+        <a href="${TALLY_BASE_URL}?table=${table}&client_token=${userId}" class="btn">Continue to Order</a>
       `;
     }
   }
