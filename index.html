@@ -46,7 +46,7 @@
           <p>Please check your table number or ask counter staff for assistance.</p>
         `;
       } else {
-        const tallyUrl = `${TALLY_BASE_URL}?table=${table}&user_id=${userId}`;
+       const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}`;
         window.location.href = tallyUrl;
       }
     } catch (err) {
