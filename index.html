@@ -6,24 +6,11 @@
   <title>Cafe QR Gateway</title>
 
   <!-- ================================================================= -->
-  <!-- 🎨 SECTION 1: STYLES & VISUAL DESIGNS (<style>)                  -->
-  <!-- Describes how the page looks (background colors, fonts, card,   -->
-  <!-- and button shapes)                                                -->
+  <!-- 🎨 SECTION 1: STYLES & VISUAL DESIGNS (<style>)                   -->
   <!-- ================================================================= -->
   <style>
-    /* ----------------------------------------------------------------- */
-    /* 1A. Page Layout & Text Colors                                     */
-    /* ----------------------------------------------------------------- */
     body { font-family: system-ui, sans-serif; background: #1800ad; color: #FAF9F6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    
-    /* ----------------------------------------------------------------- */
-    /* 1B. Center Status Card Box                                        */
-    /* ----------------------------------------------------------------- */
     .card { background: #FAF9F6; color: #1800ad; padding: 2rem; border-radius: 16px; text-align: center; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-    
-    /* ----------------------------------------------------------------- */
-    /* 1C. Fallback Action Button                                        */
-    /* ----------------------------------------------------------------- */
     .btn { background: #2E7D32; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 15px; }
   </style>
 </head>
@@ -31,12 +18,7 @@
 
   <!-- ================================================================= -->
   <!-- 🏗️ SECTION 2: PAGE STRUCTURE & HTML ELEMENTS                    -->
-  <!-- Visual building blocks of the gateway screen                     -->
   <!-- ================================================================= -->
-
-  <!-- ----------------------------------------------------------------- -->
-  <!-- 2A. Loading & Status Screen Container                             -->
-  <!-- ----------------------------------------------------------------- -->
   <div class="card" id="statusCard">
     <h2>Connecting...</h2>
     <p>Checking table availability.</p>
@@ -44,7 +26,6 @@
 
   <!-- ================================================================= -->
   <!-- ⚙️ SECTION 3: APPLICATION LOGIC (<script>)                       -->
-  <!-- Handles user checking, table validation, and redirects           -->
   <!-- ================================================================= -->
   <script>
     /* ----------------------------------------------------------------- */
@@ -55,7 +36,6 @@
 
     /* ----------------------------------------------------------------- */
     /* 3B. User ID Generator & Local Storage                             */
-    /* Creates or retrieves a unique guest ID on this device            */
     /* ----------------------------------------------------------------- */
     function getOrCreateUserId() {
       let uid = localStorage.getItem("focus_user_id");
@@ -67,43 +47,54 @@
     }
 
     /* ----------------------------------------------------------------- */
-    /* 3C. Gateway Logic & Table Verification                            */
-    /* Checks if the table is free and redirects to the ordering form    */
+    /* 3C. Session Parity State Helper (ADDED)                            */
+    /* Calculates even (true) vs uneven (false) session number           */
+    /* ----------------------------------------------------------------- */
+    function getEvenUnevenState(table) {
+      let countKey = 'renewal_count_' + table;
+      let renewalCount = parseInt(localStorage.getItem(countKey) || '0', 10);
+      return (renewalCount % 2 === 0);
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* 3D. Gateway Logic & Table Verification                             */
     /* ----------------------------------------------------------------- */
     async function processGateway() {
       const urlParams = new URLSearchParams(window.location.search);
       const table = urlParams.get("table") || "1";
       const userId = getOrCreateUserId();
+      
+      // Calculate even_uneven state (FIX 1)
+      const evenUneven = getEvenUnevenState(table);
+
+      // Build target Tally URL including even_uneven parameter (FIX 2)
+      const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}&even_uneven=${evenUneven}`;
 
       try {
         const res = await fetch(`${APPS_SCRIPT_URL}?action=checkUser&table=${table}&client=${userId}`);
         const data = await res.json();
 
         if (data.occupied) {
-          // Message shown if someone else is at this table
           document.getElementById("statusCard").innerHTML = `
             <h2 style="color: #D32F2F;">Table Occupied</h2>
             <p>Table ${table} currently has an active focus session registered to another guest.</p>
             <p>Please check your table number or ask counter staff for assistance.</p>
           `;
         } else {
-          // Table is available: send user to the order form
-          const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}`;
+          // Send user to Tally with table, client_token, and even_uneven
           window.location.href = tallyUrl;
         }
       } catch (err) {
-        // Fallback message if the server connection fails
         document.getElementById("statusCard").innerHTML = `
           <h2>Connection Error</h2>
           <p>Could not verify table status. Proceeding to order form...</p>
-          <a href="${TALLY_BASE_URL}?table=${table}&client_token=${userId}" class="btn">Continue to Order</a>
+          <a href="${tallyUrl}" class="btn">Continue to Order</a>
         `;
       }
     }
 
     /* ----------------------------------------------------------------- */
-    /* 3D. Automatic Start on Page Load                                 */
-    /* Starts running the process as soon as the page is ready           */
+    /* 3E. Automatic Start on Page Load                                 */
     /* ----------------------------------------------------------------- */
     window.addEventListener("DOMContentLoaded", processGateway);
   </script>
