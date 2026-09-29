@@ -6,7 +6,7 @@
   <title>Cafe QR Gateway</title>
 
   <!-- ================================================================= -->
-  <!-- 🎨 SECTION 1: STYLES & VISUAL DESIGNS (<style>)                   -->
+  <!-- 🎨 SECTION 1: STYLES & VISUAL DESIGNS (<style>)                    -->
   <!-- ================================================================= -->
   <style>
     body { font-family: system-ui, sans-serif; background: #1800ad; color: #FAF9F6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
@@ -17,7 +17,7 @@
 <body>
 
   <!-- ================================================================= -->
-  <!-- 🏗️ SECTION 2: PAGE STRUCTURE & HTML ELEMENTS                    -->
+  <!-- 🏗️ SECTION 2: PAGE STRUCTURE & HTML ELEMENTS                     -->
   <!-- ================================================================= -->
   <div class="card" id="statusCard">
     <h2>Connecting...</h2>
@@ -25,7 +25,7 @@
   </div>
 
   <!-- ================================================================= -->
-  <!-- ⚙️ SECTION 3: APPLICATION LOGIC (<script>)                       -->
+  <!-- ⚙️ SECTION 3: APPLICATION LOGIC (<script>)                        -->
   <!-- ================================================================= -->
   <script>
     /* ----------------------------------------------------------------- */
@@ -33,6 +33,7 @@
     /* ----------------------------------------------------------------- */
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzv2PvJw3T6oYSJCehgjOokKGqpuQIw2N20KVQsXTYYDGnPFFC9PagqOH4jWcBvkY0ZYg/exec";
     const TALLY_BASE_URL = "https://tally.so/r/aQqkWX"; 
+    const CLIENT_DASHBOARD_URL = "https://cafeblatime.github.io/clientdashboard/";
 
     /* ----------------------------------------------------------------- */
     /* 3B. User ID Generator & Local Storage                             */
@@ -47,7 +48,7 @@
     }
 
     /* ----------------------------------------------------------------- */
-    /* 3C. Session Parity State Helper (ADDED)                            */
+    /* 3C. Session Parity State Helper                                    */
     /* Calculates even (true) vs uneven (false) session number           */
     /* ----------------------------------------------------------------- */
     function getEvenUnevenState(table) {
@@ -64,14 +65,15 @@
       const table = urlParams.get("table") || "1";
       const userId = getOrCreateUserId();
       
-      // Calculate even_uneven state (FIX 1)
+      // Calculate even_uneven state
       const evenUneven = getEvenUnevenState(table);
 
-      // Build target Tally URL including even_uneven parameter (FIX 2)
+      // Build target URLs
       const tallyUrl = `${TALLY_BASE_URL}?table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}&even_uneven=${evenUneven}`;
+      const dashboardUrl = `${CLIENT_DASHBOARD_URL}?table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}&even_uneven=${evenUneven}`;
 
-    try {
-      const res = await fetch(`${APPS_SCRIPT_URL}?action=checkUser&table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}`);
+      try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=checkUser&table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}`);
         const data = await res.json();
 
         if (data.occupied) {
@@ -80,8 +82,11 @@
             <p>Table ${table} currently has an active focus session registered to another guest.</p>
             <p>Please check your table number or ask counter staff for assistance.</p>
           `;
+        } else if (data.isOwner) {
+          // Same user scans active table -> Redirect to Client Dashboard
+          window.location.href = dashboardUrl;
         } else {
-          // Send user to Tally with table, client_token, and even_uneven
+          // Open table -> Redirect to Tally Order Form
           window.location.href = tallyUrl;
         }
       } catch (err) {
@@ -94,7 +99,7 @@
     }
 
     /* ----------------------------------------------------------------- */
-    /* 3E. Automatic Start on Page Load                                 */
+    /* 3E. Automatic Start on Page Load                                  */
     /* ----------------------------------------------------------------- */
     window.addEventListener("DOMContentLoaded", processGateway);
   </script>
