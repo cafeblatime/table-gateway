@@ -36,7 +36,7 @@
     const CLIENT_DASHBOARD_URL = "https://cafeblatime.github.io/clientdashboard/";
 
     /* ----------------------------------------------------------------- */
-    /* 3B. User ID Generator & Local Storage                             */
+    /* 3B. User ID Generator & Local Storage Helper                      */
     /* ----------------------------------------------------------------- */
     function getOrCreateUserId() {
       let uid = localStorage.getItem("focus_user_id");
@@ -45,6 +45,11 @@
         localStorage.setItem("focus_user_id", uid);
       }
       return uid;
+    }
+
+    function clearSessionState(table) {
+      localStorage.removeItem("focus_user_id");
+      localStorage.removeItem('renewal_count_' + table);
     }
 
     /* ----------------------------------------------------------------- */
@@ -86,8 +91,12 @@
           // Same user scans active table -> Redirect to Client Dashboard
           window.location.href = dashboardUrl;
         } else {
-          // Open table -> Redirect to Tally Order Form
-          window.location.href = tallyUrl;
+          // Table is open -> Clear stale tokens, generate fresh token, and proceed to Tally
+          clearSessionState(table);
+          const freshUserId = getOrCreateUserId();
+          const freshTallyUrl = `${TALLY_BASE_URL}?table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(freshUserId)}&even_uneven=true`;
+          
+          window.location.href = freshTallyUrl;
         }
       } catch (err) {
         document.getElementById("statusCard").innerHTML = `
