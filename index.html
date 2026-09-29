@@ -52,7 +52,7 @@
     /* ----------------------------------------------------------------- */
     function getEvenUnevenState(table) {
       let countKey = 'renewal_count_' + table;
-      let renewalCount = parseInt(localStorage.getItem(countKey) || '0', 10);
+      let renewalCount = parseInt(localStorage.getItem(countKey), 10) || 0;
       return (renewalCount % 2 === 0);
     }
 
@@ -68,10 +68,10 @@
       const evenUneven = getEvenUnevenState(table);
 
       // Build target Tally URL including even_uneven parameter (FIX 2)
-      const tallyUrl = `${TALLY_BASE_URL}?table=${table}&client_token=${userId}&even_uneven=${evenUneven}`;
+      const tallyUrl = `${TALLY_BASE_URL}?table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}&even_uneven=${evenUneven}`;
 
-      try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?action=checkUser&table=${table}&client=${userId}`);
+    try {
+      const res = await fetch(`${APPS_SCRIPT_URL}?action=checkUser&table=${encodeURIComponent(table)}&client_token=${encodeURIComponent(userId)}`);
         const data = await res.json();
 
         if (data.occupied) {
